@@ -1,33 +1,36 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
+import os
 import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  # Allow requests from any origin
 
-@app.route("/quotes", methods=["GET"])
-def get_quotes():
+@app.route("/")
+def home():
+    return {"status": "Scraper API is running!"}
+
+@app.route("/scrape", methods=["GET"])
+def scrape():
+    url = request.args.get("url")
+    if not url:
+        return jsonify({"error": "Please provide a URL"}), 400
+
     try:
-        url = "http://quotes.toscrape.com/"  # You can change this to any target site
+        # Fetch page
         response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses
+        response.raise_for_status()
 
+        # Parse HTML
         soup = BeautifulSoup(response.text, "html.parser")
-        quotes_list = []
+        title = soup.title.string if soup.title else "No title found"
 
-        for quote_block in soup.find_all("div", class_="quote"):
-            text = quote_block.find("span", class_="text").get_text()
-            author = quote_block.find("small", class_="author").get_text()
-            quotes_list.append({"text": text, "author": author})
-
-        return jsonify({"status": "success", "data": quotes_list})
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"url": url, "title": title})
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
